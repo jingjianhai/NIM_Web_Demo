@@ -8,7 +8,8 @@ var fn = NetcallBridge.prototype;
 // 每当设备信息发生变化时，调用此方法同步设备控制按钮状态和提示信息，更新设备输入,更新视频画面提示信息等
 fn.checkDeviceStateUI = function () {
     var temp = this.netcall
-    var p1 = this.netcall.getDevicesOfType(Netcall.DEVICE_TYPE_VIDEO).then(function (obj) {
+    var WebRTC2 = this.netcall.getSdkInstance().WebRTC2
+    var p1 = WebRTC2.getCameras().then(function (obj) {
         var $camera = $(".netcall-box .camera.control-item");
         if (obj.length || (obj.devices && obj.devices.length)) {
             // 摄像头从无到有的变化
@@ -57,7 +58,7 @@ fn.checkDeviceStateUI = function () {
             }
         }
     }.bind(this));
-    var p2 = this.netcall.getDevicesOfType(Netcall.DEVICE_TYPE_AUDIO_IN).then(function (obj) {
+    var p2 = WebRTC2.getMicrophones().then(function (obj) {
         var $microphone = $(".netcall-box .microphone.control-item");
 
         if (obj.length || (obj.devices && obj.devices.length)) {
@@ -82,7 +83,7 @@ fn.checkDeviceStateUI = function () {
             // $microphone.toggleClass("no-device", true).attr("title", "麦克风不可用");
         }
     }.bind(this));
-    var p3 = this.netcall.getDevicesOfType(Netcall.DEVICE_TYPE_AUDIO_OUT_CHAT).then(function (obj) {
+    var p3 = WebRTC2.getSpeakers().then(function (obj) {
         var $volume = $(".netcall-box .volume.control-item");
         if (obj.length || (obj.devices && obj.devices.length)) {
             if ($volume.is(".no-device")) {
@@ -98,6 +99,7 @@ fn.checkDeviceStateUI = function () {
 };
 
 fn.onDeviceNoUsable = function (type) {
+    return
     if (type === Netcall.DEVICE_TYPE_VIDEO) {
         // 通知对方，我方摄像头不可用
         this.netcall.control({
@@ -160,6 +162,7 @@ fn.toggleFullScreen = function (e) {
     $(e.target).toggleClass('active', this.isFullScreen);
 
     var account = $(e.target).closest('.item').data('account');
+    console.warn('account: ', account)
 
     // 重置大小
     var defaultVideoCaptureSize = { cut: true, width: 138, height: 138 };
@@ -168,11 +171,12 @@ fn.toggleFullScreen = function (e) {
     var preAccount = this.videoCaptureSize.account;
 
     // 画面大小重置
-    this.netcall.setVideoViewSize(defaultVideoCaptureSize)
-    this.netcall.setVideoViewRemoteSize(defaultVideoCaptureSize)
+    this.setVideoViewSize(defaultVideoCaptureSize)
+    this.setVideoViewRemoteSize(null, defaultVideoCaptureSize)
+
     // 重置上一次的大小
     defaultVideoCaptureSize.account = preAccount
-    this.netcall.setVideoViewRemoteSize(defaultVideoCaptureSize)
+    this.setVideoViewRemoteSize(preAccount, defaultVideoCaptureSize)
 
     // 设置新的大小
     var videoCaptureSize = this.videoCaptureSize = { cut: true, account: account };
@@ -181,11 +185,11 @@ fn.toggleFullScreen = function (e) {
 
     // 设置自己
     if (account === this.yx.accid && this.isFullScreen) {
-        return this.netcall.setVideoViewSize(videoCaptureSize)
+        return this.setVideoViewSize(videoCaptureSize)
     }
 
     // 设置单个目标
-    this.netcall.setVideoViewRemoteSize(videoCaptureSize)
+    this.setVideoViewRemoteSize(account, videoCaptureSize)
 
 };
 // UI界面蒙版展示提示信息，指定时间后消失，消失后执行回调函数
@@ -211,7 +215,10 @@ fn.setVideoSize = function (sizeObj) {
         height: this.isFullScreen ? 180 : 120
     };
     var size = sizeObj && sizeObj.constructor === Object ? sizeObj : $(".netcall-video-local").is(".bigView") ? bigSize : smallSize;
-    this.netcall.setVideoViewSize(size);
+    var client = this.webrtc.getSdkInstance().rtcClient
+
+    client.adapterRef.localStream.setLocalRenderMode(size)
+    //this.netcall.setVideoViewSize(size);
 }
 fn.setVideoRemoteSize = function (sizeObj) {
     var bigSize = {
@@ -224,7 +231,11 @@ fn.setVideoRemoteSize = function (sizeObj) {
     };
 
     var size = sizeObj && sizeObj.constructor === Object ? sizeObj : $(".netcall-video-local").is(".bigView") ? bigSize : smallSize;
-    this.netcall.setVideoViewRemoteSize(size);
+    //this.netcall.setVideoViewRemoteSize(size);
+    var client = this.webrtc.getSdkInstance().rtcClient
+        Object.values(client.adapterRef.remoteStreamMap).forEach(stream => {
+          stream.setRemoteRenderMode(size)
+        })
 }
 // 更新视频画面显示尺寸
 fn.updateVideoShowSize = function (local, remote) {
@@ -238,19 +249,25 @@ fn.updateVideoShowSize = function (local, remote) {
         width: this.isFullScreen ? 240 : 160,
         height: this.isFullScreen ? 180 : 120
     };
+    var client = this.webrtc.getSdkInstance().rtcClient
     if (local) {
         var isBig = $(".netcall-video-local").is(".bigView")
-        console.log('local big?', isBig, isBig ? bigSize : smallSize)
-        this.netcall.setVideoViewSize(isBig ? bigSize : smallSize);
+        console.warn('本端 local big?', isBig, isBig ? bigSize : smallSize)
+        //this.netcall.setVideoViewSize(isBig ? bigSize : smallSize);
+        client.adapterRef.localStream.setLocalRenderMode(isBig ? bigSize : smallSize)
     }
     if (remote) {
         var isBig = $(".netcall-video-remote").is(".bigView")
-        console.log('remote big?', isBig, isBig ? bigSize : smallSize)
-        this.netcall.setVideoViewRemoteSize(isBig ? bigSize : smallSize);
+        console.warn('远端 remote big?', isBig, isBig ? bigSize : smallSize)
+        //this.netcall.setVideoViewRemoteSize(isBig ? bigSize : smallSize);
+        Object.values(client.adapterRef.remoteStreamMap).forEach(stream => {
+          stream.setRemoteRenderMode(isBig ? bigSize : smallSize)
+        })
     }
 };
 
 fn.hideAllNetcallUI = function () {
+    console.warn('隐藏通话界面 哦也')
     this.clearRingPlay();
     this.clearDurationTimer();
     this.clearCallTimer();
@@ -311,21 +328,24 @@ fn.hideAllNetcallUI = function () {
 fn.showConnectedUI = function (type) {
     this.checkDeviceStateUI();
     // this.$netcallBox.toggleClass("calling", true);
+    console.warn('通话建立成功后，展示视频通话或者音频通话画面: type: ', type)
+    console.warn('Netcall.NETCALL_TYPE_VIDEO: ', Netcall.NETCALL_TYPE_VIDEO)
     this.$toggleFullScreenButton.toggleClass("hide", false);
     this.$netcallBox.find(".top").toggleClass('hide', false);
     this.$callingBox.toggleClass("hide", true);
+    
     this.$videoShowBox.toggleClass("hide", type !== Netcall.NETCALL_TYPE_VIDEO);
     this.$audioShowBox.toggleClass("hide", type !== Netcall.NETCALL_TYPE_AUDIO);
+
     var info = this.yx.cache.getUserById(this.netcallAccount);
     if (type === Netcall.NETCALL_TYPE_AUDIO) {
-
         this.$audioShowBox.find(".nick").text(this.yx.getNick(this.netcallAccount));
         this.$audioShowBox.find('img').attr('src', getAvatar(info.avatar));
-
     }
-    this.$switchToVideoButton.toggleClass("hide", type !== Netcall.NETCALL_TYPE_AUDIO);
-    this.$switchToAudioButton.toggleClass("hide", type === Netcall.NETCALL_TYPE_AUDIO);
-    this.$switchToAudioButton.toggleClass("disabled", this.requestSwitchToVideoWaiting);
+    //this.$switchToVideoButton.toggleClass("hide", type !== Netcall.NETCALL_TYPE_AUDIO);
+    //this.$switchToAudioButton.toggleClass("hide", type === Netcall.NETCALL_TYPE_AUDIO);
+    //this.$switchToAudioButton.toggleClass("disabled", this.requestSwitchToVideoWaiting);
+    
     $(".asideBox .nick").text(this.yx.getNick(this.netcallAccount));
     this.$beCallingBox.toggleClass("hide", true);
 };
@@ -347,7 +367,9 @@ fn.showBeCallingUI = function (type, scene, option) {
     this.$switchToAudioButton.toggleClass("hide", true);
     this.$switchToVideoButton.toggleClass("hide", true);
     this.$netcallBox.find(".top").toggleClass('hide', false);
+    console.warn('接收方显示来电界面，兼容多人音视频')
     if (this.yx.crtSessionType === "p2p" && this.yx.crtSessionAccount === this.netcallAccount) {
+
         this.$chatBox.toggleClass("show-netcall-box", true);
     }
     this.$callingBox.toggleClass("hide", true);
@@ -368,14 +390,17 @@ fn.showBeCallingUI = function (type, scene, option) {
     /** 群视频呼叫 */
     if (scene === 'team') {
         option.nick = getNick(option.caller);
+        if(!option.nick) {
+            option.nick = option.caller
+        }
         var tmpUser = this.yx.cache.getTeamMemberInfo(option.caller, option.teamId);
         if (tmpUser.nickInTeam) {
             option.nick = option.nick === option.caller ? tmpUser.nickInTeam : option.nick;
         }
 
         text = option.nick + text;
-        info = this.yx.cache.getTeamById(option.teamId);
-        info.nick = info.name;
+        info = this.yx.cache.getTeamById(option.teamId) || {name: option.nick};
+        info.nick = info.name || option.nick; 
     } else {
         info = this.yx.cache.getUserById(this.netcallAccount);
         info.nick = this.yx.getNick(this.netcallAccount);
@@ -432,11 +457,29 @@ fn.onClickNetcallLink = function (type) {
         });
         return;
     }
+    var versionSupport = this.checkRtcBrowser()
+    that.isRtcSupported = versionSupport && rtcSupport.supportGetUserMedia && rtcSupport.supportRTCPeerConnection && rtcSupport.supportMediaStream
+    if (!that.isRtcSupported) { 
+        minAlert.alert({
+            type: 'error',
+            msg: '当前浏览器不支持WebRTC功能或H264的编解码格式, 无法使用音视频功能, 请使用最新版Chrome、Firefox浏览器',
+            confirmBtnMsg: '知道了，挂断',
+            cbConfirm: function () {
+                cbFail && cbFail(data)
+            },
+            cbCancel: function () {
+                cbFail && cbFail(data)
+            }
+        })
+    }
 
     // p2p场景
     if (that.yx.crtSessionType === 'p2p') {
-        this.displayCallMethodUI(deviceCheck.bind(that))
-        // deviceCheck.call(that);
+        //this.displayCallMethodUI(deviceCheck.bind(that))
+        //deviceCheck.call(that);
+        this.callMethod = 'webrtc';
+        this.callMethodRemember = 'webrtc';
+        next()
         return;
     }
 
@@ -447,8 +490,9 @@ fn.onClickNetcallLink = function (type) {
             that.showTip('无法发起，人数少于2人', 2000);
             return;
         }
-        that.displayCallMethodUI(deviceCheck.bind(that))
-        // deviceCheck.call(that);
+        //that.displayCallMethodUI(deviceCheck.bind(that))
+        //deviceCheck.call(that);
+        next()
     });
 
     // 下一步操作
@@ -579,7 +623,7 @@ fn.checkPlatform = function (done, failure) {
 fn.updateBeCallingSupportUI = function (isSupport, showChecking, errObj) {
 
     this.$beCallingBox.find(".checking-tip").toggleClass("hide", !showChecking);
-    this.$beCallingAcceptButton.toggleClass("disabled", !!showChecking);
+    //this.$beCallingAcceptButton.toggleClass("disabled", !!showChecking);
 
     this.$beCallingBox.find(".op").toggleClass("no-agent", !isSupport);
     errObj = errObj || {};

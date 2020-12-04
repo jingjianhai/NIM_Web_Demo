@@ -69,7 +69,7 @@ YX.fn.getTeamMembers = function (id, callback) {
 	this.mysdk.getTeamMembers(id, function (err, obj) {
 		if (!err) {
 			that.cache.setTeamMembers(id, obj)
-			callback()
+			callback(obj)
 		} else {
 			alert(err.message)
 		}
@@ -426,9 +426,10 @@ YX.fn.editTeamInfo = function () {
 
 YX.fn.saveTeamName = function () {
 	var $input = $('#teamNameInput'),
-		name = $input.val().trim(),
+		name = escapeLtAndGt($input.val().trim()),
 		that = this,
-		teamId = this.crtSessionAccount
+		teamId = this.crtSessionAccount;
+
 	if (name.length > 0) {
 		this.mysdk.updateTeam({
 			teamId: teamId,
@@ -450,7 +451,7 @@ YX.fn.saveTeamName = function () {
 
 YX.fn.saveTeamDesc = function () {
 	var $input = $('#teamDescInput'),
-		name = $input.val().trim(),
+		name = escapeLtAndGt($input.val().trim()),
 		that = this,
 		teamId = this.crtSessionAccount
 	if (name.length > 0) {

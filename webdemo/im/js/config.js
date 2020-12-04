@@ -73,7 +73,7 @@
                 'nos_accelerate': 'nos_accelerate',
                 'nos_accelerate_host': 'nos_accelerate_host',
                 'nt_server': 'nt_server',
-                'nosAccess': 'nos_uploader_web', // 确认
+                'nos_uploader': 'nos_uploader_web', // 确认
                 'websdkSsl': 'link_ssl_web' // 确认
               }
               var confData = {}

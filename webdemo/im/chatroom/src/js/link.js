@@ -21,6 +21,7 @@ var LinkRoom = function(ctr, data) {
       privateConf: CONFIG.privateConf,
       chatroomId: data.id,
       chatroomAddresses: that.address,
+      quickReconnect: true,
       onconnect: function(msg) {
         $('#room .j-chat').html('');
         util.setCookie('uid', that.room.account);

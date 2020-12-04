@@ -81,7 +81,7 @@ YX.fn.hideEditMyInfo = function(){
 
 YX.fn.saveEditMyInfo = function(){
     var $node = this.$myInfo
-    var nick = $node.find(".e-nick").val().trim()
+    var nick = escapeLtAndGt($node.find(".e-nick").val().trim())
     if(!nick){
         alert("昵称不能为空")
         return

@@ -474,6 +474,8 @@ var Cache = (function() {
    * 根据群id获取群对象
    */
   Cache.prototype.getTeamById = function(teamId) {
+    console.warn('根据群id获取群对象, teamId: ', teamId)
+    console.warn('teamMap: ', this.teamMap)
     if (this.hasTeam(teamId)) {
       return this.teamMap[teamId];
     }

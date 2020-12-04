@@ -283,12 +283,12 @@ function getMessage (msg) {
                 str = msg.fromNick + '发起了[白板互动]';
             } else if (content.type === 15) {
                 var mergeData = content.data
-                str = '<div data-url="' +
-                    mergeData.url +'" data-md5="' +
-                    mergeData.md5 +'" data-password="' +
-                    mergeData.password +'" data-compressed="' +
-                    mergeData.compressed +'" data-encrypted="' +
-                    mergeData.encrypted +'" data-sessionname="' +
+                str = '<div data-url="' + 
+                    mergeData.url +'" data-md5="' + 
+                    mergeData.md5 +'" data-password="' + 
+                    mergeData.password +'" data-compressed="' + 
+                    mergeData.compressed +'" data-encrypted="' + 
+                    mergeData.encrypted +'" data-sessionname="' + 
                     mergeData.sessionName +'" class="j-merge-box"><div>' + mergeData.sessionName + '的聊天记录</div>'
                 if (!mergeData.messageAbstract) mergeData.messageAbstract = []
                 mergeData.messageAbstract.forEach(function (item) {
@@ -570,10 +570,10 @@ function transNotification(item) {
                 }
             } else if (item.attach.team.name) {
                 var user = (item.from === userUID) ? "你" : getNick(item.from);
-                str = user + "更新" + tName + "名称为" + item.attach.team.name;
+                str = user + "更新" + tName + "名称为" + escapeLtAndGt(item.attach.team.name);
             } else if (item.attach.team.intro) {
                 var user = (item.from === userUID) ? "你" : getNick(item.from);
-                str = user + "更新群介绍为" + item.attach.team.intro;
+                str = user + "更新群介绍为" + escapeLtAndGt(item.attach.team.intro);
             } else if (item.attach.team.inviteMode) {
                 str = item.attach.team.inviteMode === 'manager' ? '邀请他人权限为管理员' : '邀请他人权限为所有人';
             } else if (item.attach.team.beInviteMode) {
@@ -658,6 +658,8 @@ function getAvatar(url) {
             url: url
         })
         return url + "?imageView&thumbnail=80x80&quality=85";
+    } else if (url === 'undefined') {
+        return "images/default-icon.png"
     } else {
         return url || "images/default-icon.png"
     }
@@ -690,4 +692,13 @@ function getAllAccount(obj) {
         }
     };
     return array;
+}
+
+function escapeLtAndGt(str) {
+  if (typeof str === "string") {
+    str = str.replace(/</g, "&lt;")
+    str = str.replace(/>/g, "&gt;")
+    return str
+  }
+  return ''
 }

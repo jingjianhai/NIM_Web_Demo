@@ -247,9 +247,9 @@
 							<p id="becallingText" class="tip"></p>
 							<div class="op">
 								<div class="normal">
-									<div class="checking-tip">检查插件中...
+									<!-- <div class="checking-tip">检查插件中...
 										<span class="netcall-icon-checking"></span>
-									</div>
+									</div> -->
 									<button class="netcall-button blue beCallingAcceptButton" id="beCallingAcceptButton">
 										<span class="txt">接听</span>
 										<span class="netcall-icon-checking"></span>
@@ -258,12 +258,12 @@
 										拒绝
 									</button>
 								</div>
-								<div class="exception">
+								<!-- <div class="exception">
 									<button class="netcall-button blue" id="downloadAgentButton">下载音视频插件</button>
 									<br/>
 									<button class="netcall-button red beCallingRejectButton">拒绝</button>
 									<div class="exception-tip">拒绝调用插件申请会导致无法唤起插件,需重启浏览器</div>
-								</div>
+								</div> -->
 							</div>
 						</div>
 						<div class="dialogs hide">
@@ -410,7 +410,7 @@
 		</div>
 	</div>
 	<div class="footer tc">
-		<span>&copy;1997 - 2018 网易公司版权所有</span>
+		<span>&copy;1997 - 2020 网易公司版权所有</span>
 	</div>
 
 	<!-- 退出确认框 -->
@@ -642,10 +642,16 @@
 		}
 	</script>
 	<script src="../3rd/nim_server_conf.js"></script>
-	<script src="../3rd/NIM_Web_SDK_v7.1.1.js"></script>
-	<script src="../3rd/NIM_Web_Netcall_v7.1.1.js"></script>
-	<script src="../3rd/NIM_Web_WebRTC_v7.1.1.js"></script>
-	<script src="../3rd/NIM_Web_WhiteBoard_v7.1.1.js"></script>
+
+	<script src="../3rd/assets/sdk/NIM_Web_SDK_v8.1.0.js"></script>
+	<script src="../3rd/assets/sdk/NIM_Web_WebRTC2_v3.7.0.js"></script>
+	<script src="../3rd/lib/index.umd.js"></script>
+
+
+	<script src="../3rd/NIM_Web_Netcall_v8.1.0.js"></script>
+	<script src="../3rd/NIM_Web_WebRTC_v8.1.0.js"></script>
+
+	<script src="../3rd/NIM_Web_WhiteBoard_v8.1.0.js"></script>
 	<script src="js/config.js"></script>
 	<script src="../3rd/DrawPlugin.js"></script>
 

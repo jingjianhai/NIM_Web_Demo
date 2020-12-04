@@ -70,7 +70,7 @@ function NetcallBridge(yx) {
     // 本地agent连接状态
     this.signalInited = false;
     // agent程序下载地址
-    this.agentDownloadUrl = "https://yx-web-nosdn.netease.im/package/1543999612/WebAgent_Setup_V2.9.0.1204.zip";
+    this.agentDownloadUrl = "https://yx-web-nosdn.netease.im/package/1582511072/WebAgent_Setup_V3.0.1.0.zip";
     // 多人音视频的缓存对象
     this.meetingCall = {};
     // 当前视频状态，是桌面共享还是视频: video / window / screen
@@ -86,7 +86,7 @@ function NetcallBridge(yx) {
 
     // 真正业务调用的 API 桥, 在进行通话方式选择之后赋值对应的实例
     this.netcall = null;
-
+    this.beCalling = false;
     // 开始初始化
     this.init();
 }
@@ -230,7 +230,17 @@ fn.initEvent = function () {
                 $(selector).parent().find(".txt").text(value);
             },
             onSlideEnd: function (position, value) {
-                this.netcall[fn](parseInt(255 * value / 10));
+                console.warn('fn: ', fn)
+                var client = this.webrtc.getSdkInstance().rtcClient
+                if(fn == 'setCaptureVolume'){
+                    client.adapterRef.localStream.setCaptureVolume(parseInt(10 * value ))
+                } else if(fn == 'setPlayVolume') {
+                    Object.values(client.adapterRef.remoteStreamMap).forEach(stream => {
+                        stream.setAudioVolume(parseInt(10 * value ))
+                    })
+                }
+                
+                //this.netcall[fn](parseInt(255 * value / 10));
             }.bind(this)
         });
     }
@@ -304,14 +314,15 @@ fn.initNetcall = function () {
     var Netcall = window.Netcall;
     var WebRTC = window.WebRTC;
 
-    NIM.use(WebRTC);
+    
     NIM.use(Netcall);
     NIM.use(window.WhiteBoard);
-
+    NIM.use(WebRTC);
+    
     var that = this;
 
     // 初始化webrtc
-    window.webrtc = this.webrtc = WebRTC.getInstance({
+    /*window.webrtc = this.webrtc = WebRTC.getInstance({
         nim: window.nim,
         container: $(".netcall-video-local")[0],
         remoteContainer: $(".netcall-video-remote")[0],
@@ -323,32 +334,50 @@ fn.initNetcall = function () {
         nim: window.nim,
         mirror: false,
         mirrorRemote: false,
-        /*kickLast: true,*/
+        kickLast: true,
         container: $(".netcall-video-local")[0],
         remoteContainer: $(".netcall-video-remote")[0]
-    });
+    });*/
+    window.webrtc = this.webrtc = new window['NRTCCalling'].RTCCalling({debug: true})
+    this.webrtc.setupAppKey({
+        appKey: CONFIG.appkey
+    })
+    this.webrtc.login({
+        appKey: CONFIG.appkey,
+        account: readCookie('uid'),
+        token:readCookie('sdktoken')
+    }).then(res=>{console.warn('登录成功')}).catch(e=>{console.error('登录失败: ', e)})
 
     this.initWebRTCEvent();
-    this.initNetcallEvent();
+    //this.initNetcallEvent();
 
     // 默认使用agent模式
-    this.netcall = this.webnet
-    this.callMethod = "webnet";
+    this.netcall = this.webrtc
+    this.callMethod = "webrtc";
 };
 
 /** 初始化webrtc事件 */
 fn.initWebRTCEvent = function () {
     var webrtc = this.webrtc;
     var that = this;
+    webrtc.on('onUserAccept', function(userId) {
+        if (this.callMethod !== 'webrtc') return
+        this.onUserAccept(userId);
+    }.bind(this))
     // 对方接受通话 或者 我方接受通话，都会触发
-    webrtc.on("callAccepted", function (obj) {
+    webrtc.on("onUserEnter", function (obj) {
         if (this.callMethod !== 'webrtc') return
-        this.onCallAccepted(obj);
+        this.onUserEnter(obj);
     }.bind(this));
-    webrtc.on("callRejected", function (obj) {
+    webrtc.on("onUserReject", function (obj) {
         if (this.callMethod !== 'webrtc') return
-        this.onCallingRejected(obj);
+        this.onUserReject(obj);
     }.bind(this));
+    webrtc.on("onUserCancel", function (obj) {
+        if (this.callMethod !== 'webrtc') return
+        this.onHangup(obj);
+    }.bind(this));
+
     webrtc.on('signalClosed', function () {
         if (this.callMethod !== 'webrtc') return
 
@@ -405,15 +434,21 @@ fn.initWebRTCEvent = function () {
     //     if (!temp.signalInited) return;
     //     this.checkDeviceStateUI();
     // }.bind(this))
-    webrtc.on("beCalling", function (obj) {
+    webrtc.on("onInvited", function (obj) {
         if (this.callMethod !== 'webrtc' || window.yunXin.WB.session.length !== 0) return
-        this.onBeCalling(obj);
+        console.warn('收到呼叫消息: ', obj)
+        if(obj.isFromGroup){
+            this.onMeetingCalling(obj)
+        } else {
+            this.onInvited(obj);
+        }
     }.bind(this));
     webrtc.on("control", function (obj) {
         if (this.callMethod !== 'webrtc' || window.yunXin.WB.session.length !== 0) return
         this.onControl(obj);
     }.bind(this));
-    webrtc.on("hangup", function (obj) {
+    webrtc.on("onCallEnd", function (obj) {
+        console.warn('收到 onCallEnd 事件')
         if (this.callMethod !== 'webrtc' || window.yunXin.WB.session.length !== 0) return
         this.onHangup(obj);
     }.bind(this));
@@ -447,135 +482,96 @@ fn.initWebRTCEvent = function () {
         console.log('user join', obj)
         // that.onJoinChannel(obj);
     }.bind(this))
-    webrtc.on('remoteTrack', function (obj) {
+    webrtc.on('onAudioAvailable', function (obj) {
         if (this.callMethod !== 'webrtc' || window.yunXin.WB.session.length !== 0) return
-        if (this.yx.crtSessionType === 'team') {
+        /*if (this.yx.crtSessionType === 'team') {
             that.onJoinChannel(obj);
-            // if (obj.track && obj.track.kind === 'video') {
-            //     // 重新设置尺寸
-            //     obj.node = this.$netcallBox.find('.netcall-meeting-box .item[data-account=' + obj.account + ']')[0]
-            //     this.startRemoteStream(obj)
-            //     this.updateVideoShowSize(true, true)
-            // }
             return
-        }
-        obj.node = this.$netcallBox.find('.netcall-meeting-box .item[data-account=' + obj.account + ']')[0]
-        console.log('on remoteTrack', obj)
-        if (obj.track && obj.track.kind === 'audio') {
-           that.setDeviceAudioOut(true);
-        }
-        if (obj.track && obj.track.kind === 'video') {
-          // 重新设置尺寸
-          this.startRemoteStream(obj)
-          this.updateVideoShowSize(true, true)
-        }
-    }.bind(this))
-    webrtc.on('leaveChannel', function (obj) {
-        if (this.callMethod !== 'webrtc' || window.yunXin.WB.session.length !== 0) return
-        console.log('sb leaveChannel', obj)
-        that.onLeaveChannel(obj);
-    }.bind(this))
-}
+        }*/
+        console.warn('on onAudioAvailable', obj)
 
-/** 初始化netcall事件 */
-fn.initNetcallEvent = function () {
-    var webnet = this.webnet;
-    var that = this;
-    // 对方接受通话 或者 我方接受通话，都会触发
-    webnet.on("callAccepted", function (obj) {
-        if (this.callMethod !== 'webnet' || window.yunXin.WB.session.length !== 0) return
-        this.onCallAccepted(obj);
-    }.bind(this));
-    webnet.on("callRejected", function (obj) {
-        if (this.callMethod !== 'webnet' || window.yunXin.WB.session.length !== 0) return
-        this.onCallingRejected(obj);
-    }.bind(this));
-
-    webnet.on('signalClosed', function () {
-        if (this.callMethod !== 'webnet' || window.yunXin.WB.session.length !== 0) return
-
-        console.log("signal closed");
-        this.signalInited = false;
-        this.showTip("信令断开了", 2000, function () {
-            this.beCalling = false;
-            this.beCalledInfo = null;
-            this.hideAllNetcallUI();
-
-            /** 如果是群视频，离开房间 */
-            if (this.meetingCall.channelName) {
-                this.leaveChannel();
-                this.resetWhenHangup();
-                return;
+        /*var node = this.$netcallBox.find('.netcall-meeting-box .item[data-account=' + 'lwuprod2' + ']')[0]
+        console.warn('node : ', node)
+        this.webrtc.setupRemoteView(obj.userId, node)
+        this.updateVideoShowSize(true, true)*/
+        if (obj.available) {
+            if (this.yx.crtSessionType === 'p2p') {
+                this.startRemoteStream(obj, 'audio');
+            } else {
+                // team
+                console.log('播放器远端 音频', obj.userId)
+                //this.startRemoteStreamMeeting(obj.userId);
+                //this.setVideoViewRemoteSize()
+                this.onJoinChannel(obj)
             }
-
-            this.netcall.hangup();
-        }.bind(this));
-    }.bind(this));
-    webnet.on("devices", function (obj) {
-        if (this.callMethod !== 'webnet' || window.yunXin.WB.session.length !== 0) return
-
-        console.log("on devices:", obj);
-        //this.checkDeviceStateUI();
-    }.bind(this));
-    webnet.on("deviceStatus", function (obj) {
-        if (this.callMethod !== 'webnet' || window.yunXin.WB.session.length !== 0) return
-        console.log("on deviceStatus:", obj);
-        this.checkDeviceStateUI();
-    }.bind(this));
-    webnet.on("beCalling", function (obj) {
-        if (this.callMethod !== 'webnet' || window.yunXin.WB.session.length !== 0) return
-        this.onBeCalling(obj);
-    }.bind(this));
-    webnet.on("control", function (obj) {
-        if (this.callMethod !== 'webnet' || window.yunXin.WB.session.length !== 0) return
-        this.onControl(obj);
-    }.bind(this));
-    webnet.on("hangup", function (obj) {
-        if (this.callMethod !== 'webnet' || window.yunXin.WB.session.length !== 0) return
-        this.onHangup(obj);
-    }.bind(this));
-    webnet.on("heartBeatError", function (obj) {
-        if (this.callMethod !== 'webnet' || window.yunXin.WB.session.length !== 0) return
-        console.log("heartBeatError,要重建信令啦");
-    }.bind(this));
-    webnet.on("callerAckSync", function (obj) {
-        if (this.callMethod !== 'webnet' || window.yunXin.WB.session.length !== 0) return
-        this.onCallerAckSync(obj);
-    }.bind(this));
-
-    webnet.on("netStatus", function (obj) {
-        if (this.callMethod !== 'webnet') return
-        // console.log("on net status:", obj);
-    }.bind(this));
-    webnet.on("statistics", function (obj) {
-        if (this.callMethod !== 'webnet') return
-        // console.log("on statistics:", obj);
-    }.bind(this));
-    webnet.on("audioVolume", function (obj) {
-        if (this.callMethod !== 'webnet' || (!this.beCalling && !this.calling && !this.netcallActive)) return
-        // console.log("on audioVolume:", obj);
-        /** 如果是群聊，转到多人脚本处理 */
-        if (this.netcall.calling && this.yx.crtSessionType === 'team' && this.meetingCall.channelName) {
-            this.updateVolumeBar(obj)
+        } else {
+            if (this.yx.crtSessionType === 'p2p') {
+                var client = this.webrtc.getSdkInstance().rtcClient
+                var stream =  client.adapterRef.remoteStreamMap[obj.uid]
+                if(stream && stream.audio) {
+                    console.warn('误报')
+                } else {
+                    this.stopRemoteStream(obj, 'audio');
+                }
+            } else {
+                // team
+                console.log('播放器远端 停止音频: ', obj.userId)
+                this.stopRemoteStreamMeeting(obj, 'audio');
+            }
         }
-    }.bind(this));
-    webnet.on("streamResize", function () {
-        if (this.callMethod !== 'webnet') return
-        console.log("stream resize", arguments)
-    }.bind(this))
-    webnet.on('joinChannel', function (obj) {
-        if (this.callMethod !== 'webnet') return
-        // type多人没用
-        console.log('user join', obj)
-        that.onJoinChannel(obj);
-    }.bind(this))
-    webnet.on('leaveChannel', function (obj) {
-        if (this.callMethod !== 'webnet') return
-        console.log('sb leaveChannel', obj)
-        that.onLeaveChannel(obj);
-    }.bind(this))
 
+    }.bind(this))
+    webrtc.on('onCameraAvailable', function (obj) {
+        if (this.callMethod !== 'webrtc' || window.yunXin.WB.session.length !== 0) return
+        /*if (this.yx.crtSessionType === 'team') {
+            that.onJoinChannel(obj);
+            return
+        }*/
+        console.warn('on onCameraAvailable', obj)
+        /*var node = this.$netcallBox.find('.netcall-meeting-box .item[data-account=' + obj.userId + ']')[0]
+
+        this.webrtc.setupRemoteView(obj.userId, node)
+        this.updateVideoShowSize(true, true)*/
+
+        if (obj.available) {
+            if (this.yx.crtSessionType === 'p2p') {
+                this.startRemoteStream(obj);
+            } else {
+                console.log('播放器远端 视频', obj.userId)
+                //this.startRemoteStreamMeeting(obj.userId);
+                //this.setVideoViewRemoteSize()
+
+                this.onJoinChannel(obj)
+            }
+        } else {
+            if (this.yx.crtSessionType === 'p2p') {
+                var client = this.webrtc.getSdkInstance().rtcClient
+                var stream =  client.adapterRef.remoteStreamMap[obj.uid]
+                if(stream && stream.video) {
+                    console.warn('误报')
+                } else {
+                    this.stopRemoteStream(obj, 'video');
+                }
+                
+            } else {
+                console.log('播放器远端 停止视频: ', obj.userId)
+                this.stopRemoteStreamMeeting(obj);
+            }
+        }
+        
+
+    }.bind(this))
+    webrtc.on('onUserLeave', function (userId) {
+        if (this.callMethod !== 'webrtc' || window.yunXin.WB.session.length !== 0) return
+        console.log('sb onUserLeave', userId)
+        that.onLeaveChannel(userId);
+        if (this.yx.crtSessionType === 'p2p') {
+            this.onHangup(userId);
+        }
+    
+    }.bind(this))
 }
+
 
 fn.onControl = function (obj) {
     console.log("on control:", obj);
@@ -758,7 +754,8 @@ fn.beingAskSwitchToVideo = function () {
 };
 // 我方请求音频切换到视频通话，对方同意时
 fn.doSwitchToVideo = function () {
-    this.log("切换到视频通话")
+    this.log("切换到视频通话, 当前不支持")
+    return
     this.requestSwitchToVideoWaiting = false;
     this.type = Netcall.NETCALL_TYPE_VIDEO;
     this.$switchToAudioButton.toggleClass("disabled", false);
@@ -804,7 +801,8 @@ fn.requestSwitchToVideoRejected = function () {
 
 };
 fn.requestSwitchToVideo = function () {
-    this.log("请求切换到视频通话");
+    this.log("请求切换到视频通话, 当前不支持");
+    return
     this.setDeviceVideoIn(true).then(function () {
         this.startLocalStream();
     }.bind(this)).then(function () {
@@ -820,11 +818,12 @@ fn.requestSwitchToVideo = function () {
 
 };
 fn.doSwitchToAudio = function () {
-    this.log("切换到音频通话");
+    this.log("切换到音频通话, 当前不支持");
+    return
     this.type = Netcall.NETCALL_TYPE_AUDIO;
     this.setDeviceVideoIn(false).then(function () {
         this.netcall.switchVideoToAudio();
-        setTimeout(function () {
+        setTimeout(() => {
             this.stopLocalStream();
             this.stopRemoteStream();
         }, 100)
@@ -835,27 +834,61 @@ fn.doSwitchToAudio = function () {
 };
 fn.stopLocalStream = function () {
     this.log("停止本地流显示 stopLocalStream");
+    
     try {
-        this.netcall.stopLocalStream();
+        //this.netcall.stopLocalStream();
+        var client = this.webrtc.getSdkInstance().rtcClient
+        client.adapterRef.localStream.muteVideo()
     } catch (e) {
         this.log("停止本地流失败");
         console && console.warn && console.warn(e);
     }
 };
-fn.stopRemoteStream = function () {
-    this.log("停止远端流显示 stopRemoteStream");
+fn.stopRemoteStream = function (obj, type) {
+    this.log("停止远端流显示 stopRemoteStream: ", type);
     try {
-        this.netcall.stopRemoteStream();
+        var client = this.webrtc.getSdkInstance().rtcClient
+        Object.values(client.adapterRef.remoteStreamMap).forEach(stream => {
+          if(type == 'audio') {
+              stream.muteAudio()
+          } else {
+              stream.muteVideo()
+          }
+          
+        })
     } catch (e) {
         this.log("停止远端流失败");
         console && console.warn && console.warn(e);
     }
 };
+fn.setLocalView = function() {
+    var node;
+    if (this.yx.crtSessionType === 'p2p') {
+        node = this.$netcallBox.find(".netcall-video-local")[0]
+    } else {
+        node = this.$netcallBox.find('.netcall-meeting-box .item')[0]
+    }
+    this.netcall.setupLocalView(node)
+}
+fn.setRemoteView = function(userId) {
+    var node;
+    if (this.yx.crtSessionType === 'p2p') {
+        node = this.$netcallBox.find(".netcall-video-remote")[0]
+    } else {
+        node = this.$netcallBox.find('.netcall-meeting-box .item[data-account=' + userId + ']')[0]
+    }
+    this.netcall.setupRemoteView(userId, node)
+}
 fn.startLocalStream = function (node) {
     node = node || this.$netcallBox.find(".netcall-video-local")[0]
     this.log("开启本地流显示 startLocalStream");
+    console.error('点对点模式播放本地视频')
     try {
-        this.netcall.startLocalStream(node);
+        var client = this.webrtc.getSdkInstance().rtcClient
+        //client.adapterRef.localStream.unmuteVideo()
+        //this.netcall.startLocalStream(node);
+        // this.netcall.setupLocalView(node)
+        this.setVideoSize()
     } catch (e) {
         this.log("开启本地流失败");
         console && console.warn && console.warn(e);
@@ -865,8 +898,12 @@ fn.startRemoteStream = function (obj) {
     obj = obj || {}
     obj.node = obj.node || this.$netcallBox.find(".netcall-video-remote")[0]
     this.log("开启远端流显示 startRemoteStream");
+    console.warn("开启远端流显示 startRemoteStream: ", obj);
+
     try {
-        this.netcall.startRemoteStream(obj);
+        //this.netcall.startRemoteStream(obj);
+        // this.netcall.setupRemoteView(obj.userId, obj.node)
+        this.updateVideoShowSize(true, true)
     } catch (e) {
         this.log("开启远端流失败");
         console && console.warn && console.warn(e);
@@ -874,6 +911,7 @@ fn.startRemoteStream = function (obj) {
 };
 fn.requestSwitchToAudio = function () {
     this.log("请求切换到音频流");
+    return
     if (this.$switchToAudioButton.is(".disabled")) return;
     this.netcall.control({
         command: Netcall.NETCALL_CONTROL_COMMAND_SWITCH_VIDEO_TO_AUDIO
@@ -883,17 +921,22 @@ fn.requestSwitchToAudio = function () {
 
 /** 同意音视频通话, 兼容多人音视频 */
 fn.accept = function (e) {
+    console.warn('接听呼叫')
     // 如果在转圈的状态，忽略
     if (this.$beCallingAcceptButton.hasClass('loading')) return
 
     var that = this
     if (this.$beCallingAcceptButton.is(".disabled")) return;
-    if (!this.beCalling) return;
+    //if (!this.beCalling) return;
 
     // 发起通话选择UI
-    this.displayCallMethodUI(deviceCheck.bind(that), function () {
+    /*this.displayCallMethodUI(deviceCheck.bind(that), function () {
         that.reject()
-    })
+    })*/
+
+    this.netcall = this.webrtc;
+    that.updateBeCallingSupportUI(true);
+    return this.callAcceptedResponse()
 
     function deviceCheck(data) {
 
@@ -948,14 +991,13 @@ fn.callAcceptedResponse = function () {
     this.log("同意对方音视频请求");
     this.beCalling = false;
 
-    this.netcall.response({
-        accepted: true,
-        beCalledInfo: this.beCalledInfo,
-        sessionConfig: this.sessionConfig
+    this.setLocalView();
+    this.netcall.accept({
+        accepted: true
     }).then(function () {
         this.log("同意对方音视频请求成功");
         // 加个定时器 处理点击接听了 实际上对面杀进程了，没有callAccepted回调
-        this.acceptAndWait = true;
+        /*this.acceptAndWait = true;
         setTimeout(function () {
             if (this.acceptAndWait) {
                 this.log("通话建立过程超时");
@@ -963,13 +1005,15 @@ fn.callAcceptedResponse = function () {
                 this.hangup()
                 this.acceptAndWait = false;
             }
-        }.bind(this), 45 * 1000)
+        }.bind(this), 45 * 1000)*/
+        this.startLocalStream()
 
     }.bind(this)).catch(function (err) {
         this.log("同意对方音视频通话失败，转为拒绝");
         console.log("error info:", err);
-        this.$beCallingAcceptButton.toggleClass("loading", false);
-        this.reject();
+        this.onHangup()
+        //this.$beCallingAcceptButton.toggleClass("loading", false);
+        //this.reject();
     }.bind(this));
 
 }
@@ -990,10 +1034,7 @@ fn.reject = function () {
     this.clearBeCallTimer();
     this.log("拒绝对方音视频通话请求");
     var beCalledInfo = this.beCalledInfo;
-    this.netcall.response({
-        accepted: false,
-        beCalledInfo: beCalledInfo
-    }).then(function () {
+    this.netcall.reject().then(function () {
         this.log("拒绝对方音视频通话请求成功");
         this.sendLocalMessage("已拒绝");
         this.beCalledInfo = null;
@@ -1039,6 +1080,7 @@ fn.sendLocalMessage = function (text, to) {
 };
 // 挂断通话过程
 fn.hangup = function () {
+    console.warn('挂断通话过程')
     this.netcall.hangup();
     this.beCalledInfo = null;
     this.beCalling = false;
@@ -1072,18 +1114,18 @@ fn.onCallerAckSync = function (obj) {
 // 对方挂断通话过程
 // 1. 通话中挂断
 // 2. 请求通话中挂断
-fn.onHangup = function (obj) {
+fn.onHangup = function (userId) {
     this.log("收到对方挂断通话消息");
-    console.log("on hange up", obj);
+    console.log("on hange up", userId);
     console.log(this.beCalling, this.beCalledInfo, this.netcallDurationTimer);
     // 是否挂断当前通话
-    if (obj.account && obj.account === this.netcallAccount) {
+    //if (obj.account && obj.account === this.netcallAccount) {
         close.call(this);
-    }
+    //}
     if (this.meetingCall.channelName) {
         return this.log("挂断消息不属于当前群视频通话，忽略");
     }
-    if (this.netcallDurationTimer !== null && this.netcall.notCurrentChannelId(obj)) {
+    if (this.netcallDurationTimer !== null && this.netcall.notCurrentChannelId(userId)) {
         return this.log("挂断消息不属于当前活动通话，忽略1");
     }
     if (this.netcallDurationTimer === null && this.beCalling && this.beCalledInfo.channelId !== obj.channelId) {
@@ -1147,7 +1189,7 @@ fn.doOpenChatBox = function () {
  * @param {object} obj 主叫信息
  * @param {string} scene 是否是群视频，默认值p2p
  */
-fn.onBeCalling = function (obj, scene) {
+fn.onInvited = function (obj, scene) {
     scene = scene || 'p2p';
     this.log("收到音视频呼叫");
     console.log("on be calling:", obj);
@@ -1156,7 +1198,7 @@ fn.onBeCalling = function (obj, scene) {
     var that = this;
 
     // 如果是同一通呼叫，直接丢掉
-    if (obj.channelId === this.channelId) return
+    //if (obj.channelId === this.channelId) return
 
     // p2p场景，先通知对方自己收到音视频通知
     // if (scene === 'p2p') {
@@ -1176,8 +1218,8 @@ fn.onBeCalling = function (obj, scene) {
         }
 
         this.log("通知呼叫方我方不空");
-        netcall.control(tmp);
-
+        //netcall.control(tmp);
+        this.webrtc.reject()
         return;
     }
 
@@ -1222,11 +1264,13 @@ fn.onBeCalling = function (obj, scene) {
         this.reject();
     }.bind(this), 62 * 1000)
 
+    console.warn('p2p场景')
     //p2p场景
     this.beCalledInfo = obj;
-    var account = obj.account;
+    var account = obj.invitor;
     this.netcallActive = true;
     this.netcallAccount = account;
+
     this.doOpenChatBox(account);
     this.showBeCallingUI(obj.type);
 
@@ -1237,106 +1281,25 @@ fn.onBeCalling = function (obj, scene) {
     $(".asideBox .nick").text(this.yx.getNick(account));
 
 };
+fn.onUserAccept = function(userId) {
+    this.setLocalView()
+}
 // 对方接受通话 或者 我方接受通话，都会触发
-fn.onCallAccepted = function (obj) {
-
-    function changeState() {
-        this.acceptAndWait = false;
-        this.log("音视频通话开始");
-        this.type = obj.type;
-        this.showConnectedUI(obj.type);
-        this.clearCallTimer();
-        this.clearRingPlay();
-        this.$beCallingAcceptButton.toggleClass("loading", false);
-        this.$switchToAudioButton.toggleClass("disabled", false);
+fn.onUserEnter = function (obj) {
+    
+    if (this.yx.crtSessionType === 'p2p') {
+        this.showConnectedUI(this.type);
+        this.startLocalStream()
     }
-
-    changeState = changeState.bind(this);
-
-    // WebRTC模式
-    if (this.isRtcSupported) {
-        // var promise;
-        // if (obj.type === WebRTC.NETCALL_TYPE_VIDEO) {
-        //     promise = this.setDeviceVideoIn(true);
-        // } else {
-        //     promise = this.setDeviceVideoIn(false);
-        // }
-        // promise.then(function () {
-        //     this.log("开始webrtc连接")
-        //     return this.netcall.startRtc();
-        // }.bind(this)).then(function () {
-        //     return this.setDeviceAudioIn(true);
-        // }.bind(this)).then(function () {
-        //     // this.startLocalStream();
-        //     // this.updateVideoShowSize(true, false);
-        //     this.updateVideoShowSize(true, true);
-        //     this.netcall.setCaptureVolume(255);
-        // }.bind(this)).then(function () {
-        //     this.log("webrtc连接成功")
-        //     changeState();
-        //     return this.setDeviceAudioOut(true);
-        // }.bind(this)).catch(function (e) {
-        //     console.error(e);
-        //     this.log("连接出错");
-
-        //     if (/webrtc兼容开关/i.test(e)) {
-        //         minAlert.alert({
-        //             type: 'error',
-        //             msg: '无法接通!请让呼叫方打开"WebRTC兼容开关"，方可正常通话', //消息主体
-        //             confirmBtnMsg: '知道了，挂断',
-        //             cbConfirm: this.hangup.bind(this)
-        //         })
-        //     }
-        // }.bind(this))
-        let that = this
-        Promise.resolve().then(function () {
-            that.log("开始webrtc连接")
-            return that.netcall.startRtc();
-        }).then(function () {
-            that.log("webrtc连接成功")
-            return that.setDeviceVideoIn(obj.type === WebRTC.NETCALL_TYPE_VIDEO);
-        }).then(function () {
-            return that.setDeviceAudioIn(true);
-        }).then(function () {
-            changeState();
-        }).catch(function (e) {
-            console.error(e);
-            that.log("连接出错");
-
-            if (/webrtc兼容开关/i.test(e)) {
-                minAlert.alert({
-                    type: 'error',
-                    msg: '无法接通!请让呼叫方打开"WebRTC兼容开关"，方可正常通话', //消息主体
-                    confirmBtnMsg: '知道了，挂断',
-                    cbConfirm: that.hangup.bind(that)
-                })
-            }
-        }.bind(that))
-    } else {
-        changeState();
-
-        if (obj.type === Netcall.NETCALL_TYPE_VIDEO) {
-            this.setDeviceAudioIn(true);
-            this.setDeviceAudioOut(true);
-            this.setDeviceVideoIn(true);
-            this.netcall.startLocalStream();
-            this.netcall.startRemoteStream();
-            $("#videoWaitingAcceptedTip").toggleClass("hide", true);
-            $("#microSliderInput1").val(10).change();
-            $("#volumeSliderInput1").val(10).change();
-            this.updateVideoShowSize(true, true);
-        } else {
-            this.setDeviceAudioIn(true);
-            this.setDeviceAudioOut(true);
-            this.setDeviceVideoIn(false);
-            $("#microSliderInput").val(10).change();
-            $("#volumeSliderInput").val(10).change();
-        }
-        // 设置采集和播放音量
-        this.netcall.setCaptureVolume(255);
-        this.netcall.setPlayVolume(255);
-    }
-
+    this.setRemoteView(obj);
+    this.acceptAndWait = false;
+    this.log("音视频通话开始: ", this.type);
+    //this.type = obj.type;
+    
+    this.clearCallTimer();
+    this.clearRingPlay();
+    this.$beCallingAcceptButton.toggleClass("loading", false);
+    this.$switchToAudioButton.toggleClass("disabled", false);
     // 通话时长显示
     this.startDurationTimer();
     /** 重置文案聊天高度 */
@@ -1349,8 +1312,8 @@ fn.onCallAccepted = function (obj) {
  * 对方拒绝通话, 兼容多人音视频
  * 先判断是否是群视频，如果是群视频，交给群视频的脚本处理
  */
-fn.onCallingRejected = function (obj) {
-
+fn.onUserReject = function (obj) {
+    console.warn('对方拒绝音视频通话: ', obj)
     if (this.yx.crtSessionType === 'team') {
         this.onMeetingCallRejected(obj);
         return;
@@ -1364,15 +1327,15 @@ fn.onCallingRejected = function (obj) {
 
 // 发起音视频呼叫
 fn.doCalling = function (type) {
-    this.log("发起音视频呼叫");
-    // this.type = type;
+    this.log("发起音视频呼叫: ", type);
+    this.type = type;
     var netcall = this.netcall;
     var account = this.yx.crtSessionAccount;
     this.netcallAccount = account;
     this.netcallActive = true;
     this.$goNetcall.find(".nick").text(this.yx.getNick(this.netcallAccount));
     this.showCallingUI();
-    var deviceType = type === Netcall.NETCALL_TYPE_VIDEO ? Netcall.DEVICE_TYPE_VIDEO : Netcall.DEVICE_TYPE_AUDIO_IN;
+    //var deviceType = type === Netcall.NETCALL_TYPE_VIDEO ? Netcall.DEVICE_TYPE_VIDEO : Netcall.DEVICE_TYPE_AUDIO_IN;
     /*netcall.getDevicesOfType(type).then(function(obj) {
         if (!obj.devices.length) {
             // return alert("无视频设备");
@@ -1385,19 +1348,10 @@ fn.doCalling = function (type) {
         this.afterPlayRingA && this.afterPlayRingA();
         this.afterPlayRingA = null;
     }.bind(this));
+    console.warn('呼叫account: ', account)
     netcall.call({
         type: type,
-        account: account,
-        pushConfig: {
-            enable: true,
-            needBadge: true,
-            needPushNick: true,
-            pushContent: '',
-            custom: '',
-            pushPayload: '',
-            sound: '',
-        },
-        sessionConfig: this.sessionConfig
+        userId: account
     }).then(function (obj) {
         this.log("发起通话成功，等待对方接听");
         // 设置超时计时器
@@ -1408,7 +1362,7 @@ fn.doCalling = function (type) {
                 this.sendLocalMessage("无人接听");
             }
         }.bind(this), 1000 * 45);
-
+        //this.startLocalStream()
         if (this.afterPlayRingA) {
             this.afterPlayRingA = function () {
                 this.playRing("E", 45);
@@ -1444,16 +1398,18 @@ fn.setDeviceAudioIn = function (state) {
     that.deviceAudioInOn = !!state;
     if (state) {
         that.log("开启麦克风");
-        return that.netcall.startDevice({
+        /*return that.netcall.startDevice({
             // 开启麦克风输入
             type: Netcall.DEVICE_TYPE_AUDIO_IN
-        }).then(function () {
+        }).*/
+
+        return that.netcall.muteLocalAudio(true).then(function () {
             that.log("开启麦克风成功，通知对方我方开启了麦克风");
             // 通知对方自己开启了麦克风
-            that.netcall.control({
+            /*that.netcall.control({
                 command: Netcall.NETCALL_CONTROL_COMMAND_NOTIFY_AUDIO_ON
             })
-            that.netcall.setCaptureVolume(255)
+            that.netcall.setCaptureVolume(255)*/
         }).catch(function () {
             console.log("开启麦克风失败");
             console.error("开启麦克风失败");
@@ -1462,13 +1418,14 @@ fn.setDeviceAudioIn = function (state) {
         });
     } else {
         that.log("关闭麦克风");
-        return that.netcall.stopDevice(Netcall.DEVICE_TYPE_AUDIO_IN) // 关闭麦克风输入
+        //return that.netcall.stopDevice(Netcall.DEVICE_TYPE_AUDIO_IN) // 关闭麦克风输入
+        return that.netcall.muteLocalAudio(false)
             .then(function () {
                 that.log("关闭麦克风成功，通知对方我方关闭了麦克风");
                 // 通知对方自己关闭了麦克风
-                that.netcall.control({
+               /* that.netcall.control({
                     command: Netcall.NETCALL_CONTROL_COMMAND_NOTIFY_AUDIO_OFF
-                });
+                });*/
             }).catch(function () {
                 that.log("关闭麦克风失败");
                 console.error("关闭麦克风失败");
@@ -1482,25 +1439,23 @@ fn.setDeviceAudioOut = function (state) {
     that.deviceAudioOutOn = !!state;
     if (state) {
         that.log("开启扬声器");
-        return that.netcall.startDevice({
-            type: Netcall.DEVICE_TYPE_AUDIO_OUT_CHAT
-        }).then(function () {
-            that.netcall.setPlayVolume(255);
-            that.log("开启扬声器成功");
-        }).catch(function () {
-            console.log("开启扬声器失败");
-            that.log("开启扬声器失败");
-            that.onDeviceNoUsable(Netcall.DEVICE_TYPE_AUDIO_OUT_CHAT);
-            console.error("开启扬声器失败");
-        });
+        var client = this.webrtc.getSdkInstance().rtcClient
+        Object.values(client.adapterRef.remoteStreamMap).forEach(stream => {
+            stream.unmuteAudio()
+        })
     } else {
-        that.log("关闭扬声器");
-        return that.netcall.stopDevice(Netcall.DEVICE_TYPE_AUDIO_OUT_CHAT).then(function () {
+        that.log("关闭扬声器")
+
+        var client = this.webrtc.getSdkInstance().rtcClient
+        Object.values(client.adapterRef.remoteStreamMap).forEach(stream => {
+            stream.muteAudio()
+        })
+        /*return that.netcall.stopDevice(Netcall.DEVICE_TYPE_AUDIO_OUT_CHAT).then(function () {
             that.log("关闭扬声器成功");
         }).catch(function () {
             that.log("关闭扬声器失败");
             console.error("关闭扬声器失败");
-        });
+        });*/
     }
 };
 
@@ -1511,17 +1466,16 @@ fn.setDeviceVideoIn = function (state) {
 
     if (state) {
         that.log("开启摄像头");
-        return that.netcall.startDevice({
+        /*return that.netcall.startDevice({
             type: Netcall.DEVICE_TYPE_VIDEO
-            /* width: that.videoCaptureSize.width,
-             height: that.videoCaptureSize.height */
-        }).then(function () {
+        }).*/
+        return that.netcall.enableLocalVideo(true).then(function () {
             that.videoType = 'video'
             that.log("开启摄像头成功，通知对方己方开启了摄像头");
             // 通知对方自己开启了摄像头
-            that.netcall.control({
+           /* that.netcall.control({
                 command: Netcall.NETCALL_CONTROL_COMMAND_NOTIFY_VIDEO_ON
-            });
+            });*/
             $(".netcall-video-local").toggleClass("empty", false);
             $(".netcall-video-local .message").text("");
 
@@ -1542,9 +1496,9 @@ fn.setDeviceVideoIn = function (state) {
             that.log("开启摄像头失败，通知对方己方摄像头不可用", err);
             that.onDeviceNoUsable(Netcall.DEVICE_TYPE_VIDEO);
 
-            that.netcall.control({
+            /*that.netcall.control({
                 command: Netcall.NETCALL_CONTROL_COMMAND_SELF_CAMERA_INVALID
-            });
+            });*/
             /** 如果是群聊，转到多人脚本处理 */
             if (that.netcall.calling && that.yx.crtSessionType === 'team' && that.meetingCall.channelName) {
                 that.updateDeviceStatus(Netcall.DEVICE_TYPE_VIDEO, true, false);
@@ -1559,12 +1513,12 @@ fn.setDeviceVideoIn = function (state) {
     } else {
         that.videoType = null
         that.log("关闭摄像头");
-        return that.netcall.stopDevice(Netcall.DEVICE_TYPE_VIDEO).then(function () {
+        return that.netcall.enableLocalVideo(false).then(function () {
             // 通知对方自己关闭了摄像头
             that.log("关闭摄像头成功，通知对方我方关闭了摄像头");
-            that.netcall.control({
+            /*that.netcall.control({
                 command: Netcall.NETCALL_CONTROL_COMMAND_NOTIFY_VIDEO_OFF
-            });
+            });*/
             $(".netcall-video-local").toggleClass("empty", true);
             $(".netcall-video-local .message").text("您关闭了摄像头");
             /** 如果是群聊，转到多人脚本处理 */
