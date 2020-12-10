@@ -88,6 +88,9 @@ var appUI = {
       )
         return '';
       var notificationText = transNotification(message);
+      if (notificationText === undefined) {
+        return '';
+      }
       msgHtml =
         '<p class="u-notice tc item" data-time="' +
         message.time +

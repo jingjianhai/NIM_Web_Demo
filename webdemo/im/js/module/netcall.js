@@ -369,13 +369,22 @@ fn.initWebRTCEvent = function () {
         if (this.callMethod !== 'webrtc') return
         this.onUserEnter(obj);
     }.bind(this));
-    webrtc.on("onUserReject", function (obj) {
+    webrtc.on("onUserReject", function (userId) {
         if (this.callMethod !== 'webrtc') return
-        this.onUserReject(obj);
+        this.onUserReject(userId);
     }.bind(this));
-    webrtc.on("onUserCancel", function (obj) {
+    webrtc.on("onUserBusy", function (userId) {
         if (this.callMethod !== 'webrtc') return
-        this.onHangup(obj);
+        this.onUserBusy(userId);
+    }.bind(this));
+    webrtc.on("onCallingTimeOut", function (userId) {
+        if (this.callMethod !== 'webrtc') return
+        this.onCallingTimeOut(userId);
+    }.bind(this));
+    webrtc.on("onUserCancel", function (userId) {
+        if (this.callMethod !== 'webrtc') return
+        this.onUserCancel(userId);
+        // this.onHangup(obj);
     }.bind(this));
 
     webrtc.on('signalClosed', function () {
@@ -483,7 +492,7 @@ fn.initWebRTCEvent = function () {
         // that.onJoinChannel(obj);
     }.bind(this))
     webrtc.on('onAudioAvailable', function (obj) {
-        if (this.callMethod !== 'webrtc' || window.yunXin.WB.session.length !== 0) return
+        // if (this.callMethod !== 'webrtc' || window.yunXin.WB.session.length !== 0) return
         /*if (this.yx.crtSessionType === 'team') {
             that.onJoinChannel(obj);
             return
@@ -494,35 +503,35 @@ fn.initWebRTCEvent = function () {
         console.warn('node : ', node)
         this.webrtc.setupRemoteView(obj.userId, node)
         this.updateVideoShowSize(true, true)*/
-        if (obj.available) {
-            if (this.yx.crtSessionType === 'p2p') {
-                this.startRemoteStream(obj, 'audio');
-            } else {
-                // team
-                console.log('播放器远端 音频', obj.userId)
-                //this.startRemoteStreamMeeting(obj.userId);
-                //this.setVideoViewRemoteSize()
-                this.onJoinChannel(obj)
-            }
-        } else {
-            if (this.yx.crtSessionType === 'p2p') {
-                var client = this.webrtc.getSdkInstance().rtcClient
-                var stream =  client.adapterRef.remoteStreamMap[obj.uid]
-                if(stream && stream.audio) {
-                    console.warn('误报')
-                } else {
-                    this.stopRemoteStream(obj, 'audio');
-                }
-            } else {
-                // team
-                console.log('播放器远端 停止音频: ', obj.userId)
-                this.stopRemoteStreamMeeting(obj, 'audio');
-            }
-        }
+        // if (obj.available) {
+        //     if (this.yx.crtSessionType === 'p2p') {
+        //         this.startRemoteStream(obj, 'audio');
+        //     } else {
+        //         // team
+        //         console.log('播放器远端 音频', obj.userId)
+        //         //this.startRemoteStreamMeeting(obj.userId);
+        //         //this.setVideoViewRemoteSize()
+        //         this.onJoinChannel(obj)
+        //     }
+        // } else {
+        //     if (this.yx.crtSessionType === 'p2p') {
+        //         var client = this.webrtc.getSdkInstance().rtcClient
+        //         var stream =  client.adapterRef.remoteStreamMap[obj.uid]
+        //         if(stream && stream.audio) {
+        //             console.warn('误报')
+        //         } else {
+        //             this.stopRemoteStream(obj, 'audio');
+        //         }
+        //     } else {
+        //         // team
+        //         console.log('播放器远端 停止音频: ', obj.userId)
+        //         this.stopRemoteStreamMeeting(obj, 'audio');
+        //     }
+        // }
 
     }.bind(this))
     webrtc.on('onCameraAvailable', function (obj) {
-        if (this.callMethod !== 'webrtc' || window.yunXin.WB.session.length !== 0) return
+        // if (this.callMethod !== 'webrtc' || window.yunXin.WB.session.length !== 0) return
         /*if (this.yx.crtSessionType === 'team') {
             that.onJoinChannel(obj);
             return
@@ -533,37 +542,37 @@ fn.initWebRTCEvent = function () {
         this.webrtc.setupRemoteView(obj.userId, node)
         this.updateVideoShowSize(true, true)*/
 
-        if (obj.available) {
-            if (this.yx.crtSessionType === 'p2p') {
-                this.startRemoteStream(obj);
-            } else {
-                console.log('播放器远端 视频', obj.userId)
-                //this.startRemoteStreamMeeting(obj.userId);
-                //this.setVideoViewRemoteSize()
+        // if (obj.available) {
+        //     if (this.yx.crtSessionType === 'p2p') {
+        //         this.startRemoteStream(obj);
+        //     } else {
+        //         console.log('播放器远端 视频', obj.userId)
+        //         //this.startRemoteStreamMeeting(obj.userId);
+        //         //this.setVideoViewRemoteSize()
 
-                this.onJoinChannel(obj)
-            }
-        } else {
-            if (this.yx.crtSessionType === 'p2p') {
-                var client = this.webrtc.getSdkInstance().rtcClient
-                var stream =  client.adapterRef.remoteStreamMap[obj.uid]
-                if(stream && stream.video) {
-                    console.warn('误报')
-                } else {
-                    this.stopRemoteStream(obj, 'video');
-                }
+        //         this.onJoinChannel(obj)
+        //     }
+        // } else {
+        //     if (this.yx.crtSessionType === 'p2p') {
+        //         var client = this.webrtc.getSdkInstance().rtcClient
+        //         var stream =  client.adapterRef.remoteStreamMap[obj.uid]
+        //         if(stream && stream.video) {
+        //             console.warn('误报')
+        //         } else {
+        //             this.stopRemoteStream(obj, 'video');
+        //         }
                 
-            } else {
-                console.log('播放器远端 停止视频: ', obj.userId)
-                this.stopRemoteStreamMeeting(obj);
-            }
-        }
+        //     } else {
+        //         console.log('播放器远端 停止视频: ', obj.userId)
+        //         this.stopRemoteStreamMeeting(obj);
+        //     }
+        // }
         
 
     }.bind(this))
     webrtc.on('onUserLeave', function (userId) {
         if (this.callMethod !== 'webrtc' || window.yunXin.WB.session.length !== 0) return
-        console.log('sb onUserLeave', userId)
+        console.log('onUserLeave', userId)
         that.onLeaveChannel(userId);
         if (this.yx.crtSessionType === 'p2p') {
             this.onHangup(userId);
@@ -1011,7 +1020,7 @@ fn.callAcceptedResponse = function () {
     }.bind(this)).catch(function (err) {
         this.log("同意对方音视频通话失败，转为拒绝");
         console.log("error info:", err);
-        this.onHangup()
+        // this.onHangup()
         //this.$beCallingAcceptButton.toggleClass("loading", false);
         //this.reject();
     }.bind(this));
@@ -1061,7 +1070,7 @@ fn.cancelCalling = function (isClick) {
     }
     this.clearCallTimer();
     this.clearRingPlay();
-    if (isClick === true && !this.isBusy) this.sendLocalMessage("未接通");
+    if (isClick === true && !this.isBusy) this.sendLocalMessage("取消呼叫");
     this.hideAllNetcallUI();
     this.resetWhenHangup();
 };
@@ -1160,6 +1169,7 @@ fn.onHangup = function (userId) {
             // this.setDeviceAudioOut(false);
         }.bind(this));
 
+        this.sendLocalMessage('通话已结束');
         /**状态重置 */
         this.resetWhenHangup();
     }
@@ -1209,19 +1219,19 @@ fn.onInvited = function (obj, scene) {
     // }
 
     // 自己正在通话或者被叫中, 知对方忙并拒绝通话
-    var WB = window.yunXin.WB
-    if (netcall.calling || this.beCalling || WB.isCalling || WB.isCalled) {
+    // var WB = window.yunXin.WB
+    // if (netcall.calling || this.beCalling || WB.isCalling || WB.isCalled) {
 
-        var tmp = { command: Netcall.NETCALL_CONTROL_COMMAND_BUSY };
-        if (scene === 'p2p') {
-            tmp.channelId = channelId;
-        }
+    //     var tmp = { command: Netcall.NETCALL_CONTROL_COMMAND_BUSY };
+    //     if (scene === 'p2p') {
+    //         tmp.channelId = channelId;
+    //     }
 
-        this.log("通知呼叫方我方不空");
-        //netcall.control(tmp);
-        this.webrtc.reject()
-        return;
-    }
+    //     this.log("通知呼叫方我方不空");
+    //     //netcall.control(tmp);
+    //     this.webrtc.reject()
+    //     return;
+    // }
 
     // 正常发起通话请求
     this.type = obj.type;
@@ -1312,10 +1322,9 @@ fn.onUserEnter = function (obj) {
  * 对方拒绝通话, 兼容多人音视频
  * 先判断是否是群视频，如果是群视频，交给群视频的脚本处理
  */
-fn.onUserReject = function (obj) {
-    console.warn('对方拒绝音视频通话: ', obj)
+fn.onUserReject = function (userId) {
+    console.warn('对方拒绝音视频通话: ', userId)
     if (this.yx.crtSessionType === 'team') {
-        this.onMeetingCallRejected(obj);
         return;
     }
 
@@ -1324,6 +1333,51 @@ fn.onUserReject = function (obj) {
     this.clearCallTimer();
     this.sendLocalMessage("对方已拒绝");
 };
+
+/**
+ * 对方正忙
+ */
+fn.onUserBusy = function (userId) {
+    console.warn('对方正忙: ', userId)
+    if (this.yx.crtSessionType === 'team') {
+        return;
+    }
+
+    this.log("对方正忙");
+    this.showTip("对方正忙", 2000, this.hideAllNetcallUI.bind(this));
+    this.clearCallTimer();
+    this.sendLocalMessage("对方正忙");
+}
+
+/**
+ * 对方正忙
+ */
+fn.onCallingTimeOut = function (userId) {
+    console.warn('呼叫超时: ', userId)
+    if (this.yx.crtSessionType === 'team') {
+        return;
+    }
+
+    this.log("呼叫超时");
+    this.showTip("呼叫超时", 2000, this.hideAllNetcallUI.bind(this));
+    this.clearCallTimer();
+    this.sendLocalMessage("呼叫超时");
+}
+
+/**
+ * 对方已取消呼叫
+ */
+fn.onUserCancel = function (userId) {
+    console.warn('对方已取消呼叫: ', userId)
+    if (this.yx.crtSessionType === 'team') {
+        return;
+    }
+
+    this.log("对方已取消呼叫");
+    this.showTip("对方已取消呼叫", 2000, this.hideAllNetcallUI.bind(this));
+    this.clearCallTimer();
+    this.sendLocalMessage("对方已取消呼叫");
+}
 
 // 发起音视频呼叫
 fn.doCalling = function (type) {

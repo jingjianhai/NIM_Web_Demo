@@ -90,6 +90,10 @@ export declare type PushInfo = {
     needPush: boolean;
     needBadge: boolean;
 };
+export declare type StreamConfig = {
+    audio: boolean;
+    video: boolean;
+};
 export declare type ChannelEvent = {
     eventType: string;
     channelName: string;
@@ -147,4 +151,6 @@ export interface RTCCommon {
     selectSpeakers(deviceId: string): Promise<void>;
     getDevices(): Promise<Devices>;
     switchDevice(type: DeviceType, deviceId: string): Promise<void>;
+    switchCallType(type: CallType): Promise<void>;
+    setAudioMute(mute: boolean, userId: string): Promise<void>;
 }

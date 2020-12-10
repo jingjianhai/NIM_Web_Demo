@@ -493,6 +493,9 @@ function transNotification(item) {
         var netcallType = item.attach.netcallType;
         var netcallTypeText = netcallType === Netcall.NETCALL_TYPE_VIDEO ? '视频' : '音频';
         console.log(item);
+        if (/g2/i.test(item.type)) {
+            return undefined;
+        }
         switch (type) {
             case 'netcallMiss':
                 return '未接听';

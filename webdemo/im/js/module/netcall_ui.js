@@ -267,7 +267,7 @@ fn.updateVideoShowSize = function (local, remote) {
 };
 
 fn.hideAllNetcallUI = function () {
-    console.warn('隐藏通话界面 哦也')
+    console.warn('隐藏通话界面')
     this.clearRingPlay();
     this.clearDurationTimer();
     this.clearCallTimer();

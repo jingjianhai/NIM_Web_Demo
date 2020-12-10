@@ -115,6 +115,10 @@ YX.fn.doMsg = function(msg) {
         })
       }
     };
+  // 不处理g2消息
+  if (/g2/i.test(msg.type)) {
+    return;
+  }
   //非群通知消息处理
   if (/text|image|file|audio|video|geo|custom|tip|robot/i.test(msg.type)) {
     this.cache.addMsgs(msg);

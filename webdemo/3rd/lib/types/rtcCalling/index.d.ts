@@ -4,6 +4,7 @@ import { RTCCalling as RTCCallingTypes } from '../types/rtcCalling';
 declare class RTCCalling extends EventEmitter implements RTCCallingTypes {
     static version: string;
     private log;
+    private debug;
     private localStream;
     private remoteStreams;
     private localView;
@@ -127,7 +128,7 @@ declare class RTCCalling extends EventEmitter implements RTCCallingTypes {
     enableLocalVideo(enabled: boolean): Promise<void>;
     /**
      * 开启/关闭麦克风
-     * @param mute true 开启 false 关闭
+     * @param mute true 关闭 false 开启
      */
     muteLocalAudio(mute: boolean): Promise<void>;
     /**
@@ -145,6 +146,17 @@ declare class RTCCalling extends EventEmitter implements RTCCallingTypes {
      * @param deviceId 设备id
      */
     switchDevice(type: DeviceType, deviceId: string): Promise<void>;
+    /**
+     * 切换通话类型
+     * @param type CallType
+     */
+    switchCallType(type: CallType): Promise<void>;
+    /**
+     * 取消订阅远端音频流
+     * @param mute true 关闭 false 开启
+     * @param userId account
+     */
+    setAudioMute(mute: boolean, userId: string): Promise<void>;
     /**
      * 获取房间信息
      */
@@ -190,7 +202,8 @@ declare class RTCCalling extends EventEmitter implements RTCCallingTypes {
      * 订阅G2流
      * @param stream
      */
-    private rTCSubscribe;
+    private rtcSubscribe;
+    private rtcUnSubscribe;
     /**
      * 离开G2房间
      */
@@ -230,7 +243,7 @@ declare class RTCCalling extends EventEmitter implements RTCCallingTypes {
     private _enableLocalVideo;
     /**
      * 开启/关闭麦克风
-     * @param mute true 开启 false 关闭
+     * @param mute true 关闭 false 开启
      * @param deviceId [可选] 设备id
      */
     private _muteLocalAudio;
