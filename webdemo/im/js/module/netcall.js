@@ -988,6 +988,7 @@ fn.accept = function (e) {
 
 /** 同意通话的操作 */
 fn.callAcceptedResponse = function () {
+    this.$beCallingAcceptButton.toggleClass("loading", true);
 
     /** 如果是群视频通话 */
     if (this.yx.crtSessionType === 'team') {
@@ -1090,6 +1091,7 @@ fn.sendLocalMessage = function (text, to) {
 // 挂断通话过程
 fn.hangup = function () {
     console.warn('挂断通话过程')
+    this.sendLocalMessage('通话已结束');
     this.netcall.hangup();
     this.beCalledInfo = null;
     this.beCalling = false;
@@ -1129,7 +1131,7 @@ fn.onHangup = function (userId) {
     console.log(this.beCalling, this.beCalledInfo, this.netcallDurationTimer);
     // 是否挂断当前通话
     //if (obj.account && obj.account === this.netcallAccount) {
-        close.call(this);
+        // close.call(this);
     //}
     if (this.meetingCall.channelName) {
         return this.log("挂断消息不属于当前群视频通话，忽略");
@@ -1143,9 +1145,9 @@ fn.onHangup = function (userId) {
     if (this.netcallDurationTimer === null && !this.beCalling) {
         return this.log("挂断消息不属于当前活动通话，忽略3，当前无通话活动");
     }
-    try {
+    // try {
         // $("#askSwitchToVideoDialog").dialog("close");
-    } catch (e) { }
+    // } catch (e) { }
     this.clearBeCallTimer();
     /* var tipText;
     if(this.netcallDurationTimer !== null) {
